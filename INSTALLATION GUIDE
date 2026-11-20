@@ -1,0 +1,474 @@
+EXPERT_ADVISOR_BOT — Installation & Deployment Guide
+Purpose: This document is only for installing, configuring, testing and starting EXPERT_ADVISOR_BOT on a Windows PC or an AWS Windows EC2 VPS. The project overview and code architecture belong in README.md.
+
+Live-trading warning: The supplied main.py connects to MetaTrader 5 and runs the Scalping, Intraday, Swing and News pipelines. Its execution path can submit real orders when the terminal and account permit Python trading. There is no verified paper-trading/dry-run switch in the supplied main.py. Complete the initial setup on a DEMO account only. Do not treat installation success as proof of strategy profitability or safety.
+
+1. Installation target and recommended versions
+The supplied project is a Windows-oriented Python application that communicates with the locally installed MetaTrader 5 desktop terminal through the MetaTrader5 Python package.
+Component	Recommended selection	Notes
+Operating system — local	Windows 10/11, 64-bit	Use an x86-64 Windows installation.
+Operating system — VPS	Windows Server 2022 Base, x86-64	Use the Windows EC2 AMI, not Ubuntu/Linux, for this current MT5 Python setup.
+Python	Python 3.14.10, 64-bit	Recommended current Windows interpreter target as of this guide. Use the 64-bit installer.
+Python environment	venv	Keep this project's packages isolated.
+Trading terminal	MetaTrader 5 Desktop, 64-bit	Prefer the terminal installer supplied by your broker if it uses a broker-specific server/build.
+Git	Current Git for Windows	Needed to clone and update the GitHub repository.
+Editor	VS Code (optional)	Not required to run the bot.
+AWS service	Amazon EC2 Windows instance	This is the Windows VPS hosting the terminal and bot.
+AWS region	Mumbai — ap-south-1	Choose another region only after considering broker server latency and current AWS availability/cost.
+
+
+Why Python 3.14.10 instead of 3.10?
+The ZIP contains __pycache__ files compiled by CPython 3.10. Those are generated cache files; they do not mean the source code must run on Python 3.10. Python 3.10 reached end-of-life on 1 October 2026 and no longer receives security updates. The MetaTrader5 package currently publishes a Windows x64 wheel for CPython 3.14. Therefore, use Python 3.14.10 x64 as the installation target, then run the import and MT5 connection checks below. The bot has not been runtime-tested on this machine or on AWS as part of this documentation task.
+
+Do not copy the ZIP's __pycache__ folder into the GitHub repository or VPS. Python will recreate cache files as needed.
+
+Official version references:
+- Python 3.14.10 release: https://www.python.org/downloads/release/python-31410/
+- Python version support schedule: https://devguide.python.org/versions/
+- MetaTrader5 package files: https://pypi.org/project/MetaTrader5/
+2. What the supplied project needs
+The imports used by the primary runner and its modules show these external Python packages:
+Package to install	Why it is needed
+MetaTrader5	Connects Python to the MT5 terminal and reads account/market/position data; the execution modules use it for order operations.
+pandas	Tabular candle, trade-history and analytics processing.
+numpy	Numerical and analytics operations.
+requests	External HTTP requests, including the news and optional Notion integrations.
+
+
+The other imports used by the primary runner are Python standard-library modules or project-local .py files. The archive does not include a requirements.txt, pinned dependency versions, or an automated test suite.
+
+Install only the packages above initially. If a future code change adds another external import, add that dependency to the installation list and document its tested version.
+3. Download and prepare the project
+Option A — Clone from GitHub (recommended)
+1. Create the GitHub repository named EXPERT_ADVISOR_BOT.
+2. Make sure the source files and INSTALLATION.md have been pushed to its main branch.
+3. Open PowerShell on the Windows PC or Windows VPS.
+4. Choose a parent folder for the bot. Example:
+New-Item -ItemType Directory -Force C:\Bots | Out-Null
+Set-Location C:\Bots
+5. Clone the repository (replace the placeholder with the real repository URL):
+git clone https://github.com/YOUR_GITHUB_USERNAME/EXPERT_ADVISOR_BOT.git
+Set-Location C:\Bots\EXPERT_ADVISOR_BOT
+Option B — Use the ZIP file
+1. Extract EXPERT ADVISOR BOT.zip into a folder such as C:\Bots\EXPERT_ADVISOR_BOT.
+2. Open PowerShell in that extracted folder.
+3. Do not copy .venv, __pycache__, .env, personal trade-history files or credentials into GitHub.
+Confirm the project root
+Run:
+Get-ChildItem
+The folder should contain main.py, strategy.py, execution.py, risk.py, trade_manager.py and the other project modules. The commands below assume the current directory is:
+C:\Bots\EXPERT_ADVISOR_BOT
+If your folder is elsewhere, use your actual path in the commands and Task Scheduler settings.
+4. Install Python 3.14.10 (64-bit)
+1. Open the official Python 3.14.10 release page: https://www.python.org/downloads/release/python-31410/.
+2. Under the Windows downloads, choose Windows installer (64-bit). Do not choose the 32-bit installer, ARM64 installer or embeddable ZIP for this standard setup.
+3. Run the installer.
+4. Enable the Python launcher / py command if the installer offers it.
+5. Complete the installation.
+6. Close and reopen PowerShell so it detects the updated PATH.
+Verify the installed interpreters:
+py -0p
+Verify Python 3.14:
+py -3.14 --version
+Expected version family:
+Python 3.14.10
+If the exact patch level has been superseded by a security release, use the latest available Python 3.14.x Windows x64 installer, then confirm py -3.14 --version. Do not change to Python 3.15 or another major/minor version without first checking that a compatible MetaTrader5 Windows x64 wheel exists and re-running the tests in this guide.
+5. Install Git for Windows
+Git is required only if you plan to clone or update the project through GitHub.
+1. Download Git for Windows: https://git-scm.com/download/win.
+2. Run the installer and use the normal recommended settings unless you have a specific Git configuration.
+3. Close and reopen PowerShell.
+4. Verify:
+git --version
+If the repository is being used from a ZIP rather than GitHub, Git is optional for local execution.
+6. Install the MetaTrader 5 desktop terminal
+1. Download the MT5 desktop installer from your broker's official website. This is preferable when the broker provides its own branded terminal/server configuration.
+2. If your broker does not provide a separate installer, use the official MetaTrader 5 download page: https://www.metatrader5.com/en/download.
+3. Install the terminal on the same Windows PC/VPS where Python will run.
+4. Open MT5 manually.
+5. Sign in to a demo trading account for initial testing.
+6. Wait until the terminal shows that it is connected to the broker's trade server.
+7. Open Market Watch and make sure the instruments you intend to use are available.
+8. Confirm that price quotes and chart history are loading.
+Broker symbol names must match
+The supplied main.py currently lists these symbols in its four pipeline configurations:
+"GOLD"
+"EURUSD"
+"GBPUSD"
+The actual names are broker-specific. A broker may use names such as XAUUSD, XAUUSDm or another suffix rather than GOLD. Check the exact names in MT5 Market Watch and update the four symbol lists in main.py only after checking the code and broker specifications. Also inspect the scalping whitelist in execution.py before adding a symbol to scalping.
+Enable Python trading only when ready
+The MT5 terminal has a protective setting that can block trading operations coming from the external Python API.
+1. In MT5, open Tools → Options → Expert Advisors (or press Ctrl+O).
+2. Find Disable automated trading via external Python API.
+3. Keep Python trading blocked while performing connection-only checks.
+4. Only when you are deliberately ready to test order execution on the DEMO account, review MT5's automated-trading permissions and the account permissions, then make sure the external-Python restriction is not blocking the test.
+Changing this permission can allow Python code to place orders. Do not enable it on a live account as part of installation. MetaQuotes documents this setting in its platform settings guide: https://www.metatrader5.com/en/terminal/help/startworking/settings.
+7. Create and activate the Python virtual environment
+Open PowerShell in the project root (C:\Bots\EXPERT_ADVISOR_BOT).
+
+Create the virtual environment using Python 3.14:
+py -3.14 -m venv .venv
+Activate it:
+.\.venv\Scripts\Activate.ps1
+Your prompt should now begin with (.venv).
+
+If PowerShell blocks activation, use this temporary policy for the current PowerShell process only, then activate again:
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+This process-scoped setting does not permanently change the machine-wide execution policy.
+
+Confirm that the virtual environment is using Python 3.14:
+python --version
+python -c "import sys; print(sys.executable)"
+The executable path should point inside the project's .venv folder.
+8. Install the Python packages
+With (.venv) active, update pip:
+python -m pip install --upgrade pip
+Install the project dependencies:
+python -m pip install MetaTrader5 pandas numpy requests
+Verify the packages:
+python -m pip show MetaTrader5 pandas numpy requests
+Verify that all required imports work:
+python -c "import MetaTrader5, pandas, numpy, requests; print('All required imports succeeded')"
+Expected message:
+All required imports succeeded
+If MetaTrader5 fails to install, do not try random Python versions or unofficial packages. First check that the active interpreter is Python 3.14 x64, that Windows is x86-64, and that a matching CPython 3.14 Windows x64 wheel is available on the official PyPI project page.
+9. Security remediation required before first public push or bot start
+Do not skip this section. The uploaded archive's email_report.py contains a hard-coded Gmail App Password-like value and hard-coded email addresses in its fallback configuration. Treat the embedded credential as exposed. If it belongs to a real account, revoke it and create a replacement only after the code has been cleaned.
+9.1 Remove hard-coded email credentials
+Open email_report.py and replace the current three fallback assignments with empty-string defaults:
+SENDER_EMAIL   = os.getenv("BOT_EMAIL", "")
+APP_PASSWORD   = os.getenv("BOT_PASS", "")
+RECEIVER_EMAIL = os.getenv("BOT_RECV", "")
+Do not leave the old password or personal email-address defaults anywhere in the file or Git history. If the credential was already pushed to GitHub, removing it in a later commit does not make the exposed secret safe; revoke it. Review Git history and rotate the credential.
+9.2 Optional email environment variables
+The email reporting module reads these operating-system environment variables:
+- BOT_EMAIL — sender Gmail address.
+- BOT_PASS — Gmail App Password, not the normal Gmail password.
+- BOT_RECV — recipient email address.
+Example for the current PowerShell window only (replace the placeholders locally; never paste actual values into a README, source file, chat or GitHub):
+$env:BOT_EMAIL = "your-sender@example.com"
+$env:BOT_PASS = "YOUR_GMAIL_APP_PASSWORD"
+$env:BOT_RECV = "your-recipient@example.com"
+These values apply to processes launched from that PowerShell window. For scheduled execution, configure the variables securely for the Windows account that runs the scheduled task, or use a secrets manager. Do not assume that a .env file will load automatically: the supplied project does not import python-dotenv or otherwise load .env files.
+
+Email reporting is optional; the core bot can be installed without configuring email. Do not configure it until the hard-coded fallback is removed.
+9.3 Optional Notion environment variables
+notion_journal.py reads:
+NOTION_TOKEN
+NOTION_DATABASE_ID
+Notion integration is optional. If the values are not set, Notion logging reports that it is not configured. Store real tokens outside source control.
+9.4 Keep private/runtime files out of GitHub
+At minimum, ensure .gitignore excludes:
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+trade_memory.csv
+error_log.csv
+ai_advisory.csv
+history_export*/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Review the contents of every CSV and configuration file before committing. Trade history, account information, terminal data, passwords and tokens are private.
+10. Test the Python-to-MT5 connection
+Do this before running main.py.
+1. Open MT5 manually.
+2. Sign in to the DEMO account.
+3. Wait for the terminal to connect.
+4. Keep the external Python trading permission blocked for this connection-only test.
+5. In the project root, create a file named mt5_connection_test.py with this content:
+import MetaTrader5 as mt5
+
+if not mt5.initialize():
+    print("MT5 initialization failed:", mt5.last_error())
+    raise SystemExit(1)
+
+try:
+    terminal = mt5.terminal_info()
+    account = mt5.account_info()
+
+    if terminal is None:
+        print("MT5 terminal information is unavailable:", mt5.last_error())
+        raise SystemExit(1)
+
+    if account is None:
+        print("MT5 account information is unavailable:", mt5.last_error())
+        raise SystemExit(1)
+
+    print("MT5 connection: SUCCESS")
+    print("Terminal version:", mt5.version())
+    print("Account connection: SUCCESS")
+    print("Broker server:", account.server)
+    print("Account currency:", account.currency)
+
+finally:
+    mt5.shutdown()
+6. Run the test from the active virtual environment:
+python mt5_connection_test.py
+Expected result includes:
+MT5 connection: SUCCESS
+Account connection: SUCCESS
+This test checks terminal/account connectivity only. It does not send an order and does not prove that order execution, symbol configuration, position sizing or the strategy is correct.
+
+If initialization fails, confirm MT5 is installed and open in the same Windows session, logged in, connected and not blocked by antivirus/firewall policy. The project's main.py calls mt5.initialize() without an explicit terminal path, so the MetaTrader5 package attempts to locate the installed terminal automatically. If multiple MT5 terminals are installed, inspect the official initialize() documentation and configure the correct terminal path in the project deliberately rather than guessing.
+
+Official MT5 Python integration references:
+- https://www.mql5.com/en/docs/python_metatrader5
+- https://www.mql5.com/en/docs/python_metatrader5/mt5initialize_py
+11. Final pre-run checklist
+Before starting main.py, check every item:
+- [ ] The intended Windows machine is 64-bit.
+- [ ] Python 3.14 x64 is installed.
+- [ ] The project virtual environment is active.
+- [ ] MetaTrader5, pandas, numpy and requests imports succeed.
+- [ ] MT5 Desktop is installed on the same machine.
+- [ ] MT5 is open and connected to the intended DEMO account.
+- [ ] The required broker symbols are visible in Market Watch.
+- [ ] The symbol lists in main.py match the broker's exact instrument names.
+- [ ] The scalping whitelist in execution.py has been checked.
+- [ ] The hard-coded email credential has been removed from email_report.py.
+- [ ] No passwords, tokens, private account data or private CSV history are committed.
+- [ ] You understand that main.py can submit orders when Python trading is permitted.
+- [ ] You are not running another copy of this bot against the same account.
+12. Start and stop the bot locally
+Start
+1. Open MT5 and confirm the DEMO account is connected.
+2. Open PowerShell in the project root.
+3. Activate the virtual environment:
+.\.venv\Scripts\Activate.ps1
+4. Start the primary runner:
+python -u main.py
+The supplied main.py is the primary entry point. It initializes MT5, initializes trade memory and starts four pipeline threads: Scalping, Intraday, Swing and News. It also runs position management and status reporting in the main loop.
+Stop
+Press Ctrl+C in the PowerShell window, then verify that the Python process has ended. Do not start a second copy until you have confirmed the first process is stopped. Keep MT5 open until you have checked the bot process and any open DEMO positions.
+Important: use main.py, not the alternate runners
+The supplied fxjers_main.py and news_main.py import ml_engine.MLEngine, but ml_engine.py is not included in the supplied ZIP. Do not use those two scripts as the first-run commands unless that missing module is restored and reviewed. The supplied main.py has the ML gate removed and prints that it runs in Pure Strategy Mode.
+PART B — AWS WINDOWS VPS DEPLOYMENT
+13. AWS architecture for this bot
+For the code supplied in this ZIP, use a Windows EC2 instance:
+GitHub: EXPERT_ADVISOR_BOT
+          |
+          | git clone / git pull
+          v
+AWS EC2 — Windows Server 2022 (x86-64)
+          |
+          +-- MetaTrader 5 Desktop terminal
+          |
+          +-- Python 3.14 x64 + .venv
+          |
+          +-- EXPERT_ADVISOR_BOT\main.py
+                  |
+                  +-- Scalping pipeline
+                  +-- Intraday pipeline
+                  +-- Swing pipeline
+                  +-- News pipeline
+          |
+          v
+Broker's MT5 trading server
+The Python package communicates with the MT5 desktop terminal on the same Windows machine. Installing Python on your personal computer while MT5 runs only on the VPS (or the reverse) is not the standard setup described here. Install both on the EC2 Windows instance.
+14. AWS account and security preparation
+1. Open https://aws.amazon.com/ and create/sign in to your AWS account.
+2. Enable multi-factor authentication (MFA) for the root account.
+3. Use an IAM identity with only the permissions required to manage EC2 and billing; do not use the root account for routine work.
+4. Open AWS Billing and set a budget or billing alert before launching the instance.
+5. Open the AWS Pricing Calculator: https://calculator.aws/.
+6. Estimate Windows EC2 compute, EBS storage, public IPv4 (if used), data transfer and applicable taxes for the intended monthly runtime.
+AWS charges depend on region, Windows licensing, selected instance, storage, public IP and usage. Do not rely on an old screenshot or a price shown for another region. A 24/7 VPS remains billable while it is running.
+15. Launch a Windows EC2 instance in Mumbai
+1. Sign in to the AWS Console: https://console.aws.amazon.com/.
+2. Select region Asia Pacific (Mumbai) — ap-south-1 in the region selector.
+3. Open EC2 → Instances → Launch instances.
+4. Name the instance:
+EXPERT_ADVISOR_BOT_VPS
+5. Under Application and OS Images (AMI), choose a standard AWS-provided Microsoft Windows Server 2022 Base, 64-bit x86 image. Confirm the architecture is x86-64, not ARM/Graviton.
+6. Choose the instance size. Suggested starting options:
+Instance	vCPU	RAM	Use
+t3.large	2	8 GiB	Lower-cost demo/initial testing option. T3 is burstable; monitor CPU credits and performance.
+t3.xlarge	4	16 GiB	More headroom for one MT5 terminal and the four bot pipelines. This is a starting recommendation, not a performance benchmark.
+
+
+T3 types are listed for the Mumbai region in AWS's regional instance-type table. Check the live console for current availability, capacity and account quotas before launch. If the application uses sustained high CPU, compare a non-burstable M-family instance and watch CloudWatch CPU metrics rather than assuming a T3 will sustain peak performance indefinitely.
+7. Under Key pair, choose Create new key pair. Give it a clear name such as EXPERT_ADVISOR_BOT_RDP_KEY, choose PEM format, create it and save the downloaded file securely. Never upload the key to GitHub or share it in chat.
+8. Under Network settings, create/select a security group with inbound RDP TCP 3389 allowed only from My IP. Do not expose RDP to 0.0.0.0/0 (the whole internet). Keep other inbound ports closed unless the application specifically needs them and you have reviewed the risk.
+9. Under storage, a starting point of 100 GiB gp3 is reasonable for Windows, MT5, Python, code and logs; adjust it to your actual storage needs and budget.
+10. Review the summary, especially the Windows AMI, region, instance size, security-group source and storage.
+11. Choose Launch instance.
+12. Wait until instance state is Running and status checks pass.
+AWS references:
+- Windows EC2 guide: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-windows-instances.html
+- Instance types by region: https://docs.aws.amazon.com/ec2/latest/instancetypes/ec2-instance-regions.html
+- T3 specifications: https://aws.amazon.com/ec2/instance-types/t3/
+16. Connect to the Windows VPS using Remote Desktop
+1. In the EC2 console, select the new instance.
+2. Choose Connect → RDP client.
+3. Choose Get password.
+4. Upload the private .pem key file created for this instance.
+5. Choose Decrypt password and copy the Administrator password into a secure password manager.
+6. On your Windows PC, press Win+R, type mstsc, and press Enter.
+7. Enter the instance's public IPv4 address or public DNS name.
+8. Sign in with the Administrator username and the decrypted password.
+9. On first login, change/store the password securely as appropriate for your Windows account policy.
+10. When finished with an RDP session, choose Disconnect, not Sign out, if you need the desktop applications to keep running. Sign-out closes that user's interactive applications.
+If your home/public IP changes, update the security group's RDP source to your new IP. Do not solve an RDP connection problem by opening port 3389 to the entire internet.
+
+AWS RDP guide: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/connect-rdp.html.
+17. Install the bot on the AWS Windows VPS
+After connecting by RDP, perform the same software installation inside the VPS:
+1. Install Python 3.14.x, Windows x64.
+2. Install Git for Windows.
+3. Install the broker's MetaTrader 5 Desktop terminal.
+4. Open MT5 and sign in to a DEMO account.
+5. Clone the GitHub repository into C:\Bots.
+6. Create the .venv environment.
+7. Install the four external packages.
+8. Apply the email-credential security remediation.
+9. Run the MT5 connection test.
+PowerShell commands for the project download and Python setup:
+New-Item -ItemType Directory -Force C:\Bots | Out-Null
+Set-Location C:\Bots
+
+git clone https://github.com/YOUR_GITHUB_USERNAME/EXPERT_ADVISOR_BOT.git
+Set-Location C:\Bots\EXPERT_ADVISOR_BOT
+
+py -3.14 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install MetaTrader5 pandas numpy requests
+python -c "import MetaTrader5, pandas, numpy, requests; print('Dependencies OK')"
+Replace YOUR_GITHUB_USERNAME with the actual GitHub account name. Do not put GitHub passwords, personal access tokens or AWS keys directly in commands that may be saved in shell history.
+
+Repeat the connection test from Section 10 inside the VPS. A successful test on your personal PC does not prove the VPS has a working MT5 connection.
+18. Configure and first-run on AWS
+1. Open MT5 on the VPS.
+2. Confirm the DEMO account and broker connection.
+3. Confirm symbol names and market data.
+4. Run python mt5_connection_test.py and verify success.
+5. Review the risk.py, execution.py, symbol lists and trade-management code before permitting any order.
+6. Keep the terminal's external-Python trading permission blocked until you are deliberately ready to perform DEMO order testing.
+7. When ready for DEMO order testing, apply the appropriate MT5 permission and run only one instance:
+Set-Location C:\Bots\EXPERT_ADVISOR_BOT
+.\.venv\Scripts\Activate.ps1
+python -u main.py
+8. Monitor the terminal, bot output, open positions, error logs, margin and account state. Stop immediately if behaviour differs from expectations.
+Do not switch from DEMO to LIVE simply because the bot starts without an exception. First complete independent code review, controlled testing, broker-specific validation and a decision about the financial risk.
+19. Keep the bot running on the VPS
+A Python process started inside a PowerShell window runs only while that process remains alive. For a first deployment, start the MT5 terminal manually, sign in, then start the bot manually and monitor it.
+
+After the manual setup is stable, Windows Task Scheduler can launch the bot when the dedicated Windows user signs in.
+19.1 Create a launcher file
+In C:\Bots\EXPERT_ADVISOR_BOT, create run_bot.bat with:
+@echo off
+cd /d C:\Bots\EXPERT_ADVISOR_BOT
+if not exist logs mkdir logs
+.venv\Scripts\python.exe -u main.py >> logs\bot.log 2>&1
+This writes standard output and errors to logs\bot.log. Make sure logs/ is ignored by Git if it contains private runtime information.
+19.2 Create a scheduled task
+1. Open Start → Task Scheduler.
+2. Choose Create Task (not the basic task wizard, so you can review all settings).
+3. On General, name it EXPERT_ADVISOR_BOT.
+4. For the initial GUI-dependent setup, select Run only when user is logged on. Use the same Windows account that opens and connects the MT5 terminal.
+5. On Triggers, create At log on for that Windows user. Add a short delay (for example, one minute) only after testing MT5 startup order.
+6. On Actions, choose Start a program.
+7. Program/script:
+C:\Bots\EXPERT_ADVISOR_BOT\run_bot.bat
+8. Start in (optional but recommended):
+C:\Bots\EXPERT_ADVISOR_BOT
+9. On Settings, configure a restart after failure only after testing the task. Prevent multiple simultaneous instances (choose the option that does not start a new instance if one is already running).
+10. Save the task and test it manually from Task Scheduler.
+11. Verify the MT5 terminal is connected before the bot task starts. A delayed task is not a substitute for checking the terminal and broker connection.
+Important desktop-session limitation: MT5 is a desktop terminal. Do not assume that a task configured to run while no user is logged on will behave the same as a manually opened desktop terminal. Validate start-up, disconnect/reconnect, Windows restart, MT5 reconnection and bot logs on the actual VPS before depending on unattended operation. Disconnecting RDP normally leaves the Windows user session running; signing out closes it.
+19.3 Restart and stop procedure
+Before updating or restarting:
+1. Stop the bot process.
+2. Check the MT5 terminal and open DEMO positions.
+3. Apply code updates.
+4. Re-run dependency/import checks if packages changed.
+5. Re-run the MT5 connection test.
+6. Start only one bot process.
+7. Check logs\bot.log and MT5 status.
+Do not terminate an EC2 instance while relying on the bot to manage positions. If the VPS is stopped, terminated, disconnected or the Python process dies, the bot cannot continue running its management loop. Open broker-side positions may remain open; the trader must understand and manage that risk independently.
+20. Updating the VPS from GitHub
+Use this only after stopping the running bot and checking positions:
+Set-Location C:\Bots\EXPERT_ADVISOR_BOT
+git status
+git pull origin main
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install MetaTrader5 pandas numpy requests
+python -c "import MetaTrader5, pandas, numpy, requests; print('Dependencies OK')"
+Then run the MT5 connection test and start the bot again. If the updated code changes dependency requirements, update the installation procedure and tested package versions before deploying.
+
+Never run git pull over an actively running trading process. Do not overwrite local credentials or runtime data with repository content.
+21. Troubleshooting
+Symptom	Check	Action
+py -3.14 not found	Python install and PATH/launcher	Reinstall the official 64-bit Python installer or repair the launcher; reopen PowerShell.
+python points to another version	Active virtual environment	Activate .venv and check python --version and sys.executable.
+No module named MetaTrader5	Package installed in a different interpreter	Activate .venv, then install using python -m pip install MetaTrader5.
+No module named pandas/numpy/requests	Missing dependency	Install the missing package into the active .venv.
+MetaTrader5 wheel unavailable	Wrong architecture or unsupported interpreter	Confirm Python 3.14 x64 and check the current PyPI wheel list. Do not install untrusted binaries.
+mt5.initialize() fails	Terminal not found, terminal closed, incompatible terminal/session or access issue	Open MT5 in the same Windows machine/session, log in, then rerun the connection test. Check mt5.last_error().
+MT5 connects but account info is None	Terminal/account not fully connected	Check broker login, terminal status and account selection.
+Symbol not found / no tick	Broker uses another symbol name or symbol is not selected	Check Market Watch and update the code's symbol configuration carefully.
+Order rejected	Broker rules, trading permissions, volume, stops, market state or margin	Inspect MT5 retcode and request; verify symbol contract/trade settings. Do not repeatedly retry without diagnosis.
+External Python trading blocked	MT5 security option	Keep blocked for connection-only tests; only change it intentionally during DEMO order testing.
+Notion warning	Optional variables missing	Set NOTION_TOKEN and NOTION_DATABASE_ID, or leave Notion disabled.
+Email not configured	Optional variables missing	Remove hard-coded fallback first; then set BOT_EMAIL, BOT_PASS, BOT_RECV, or leave email disabled.
+Bot stops when RDP closes	User signed out or desktop process/session ended	Disconnect instead of signing out; validate the session and Task Scheduler setup.
+Bot starts twice	Duplicate manual/task instances	Stop duplicates and configure Task Scheduler not to start a second instance.
+AWS RDP timeout	Security group, public address, route or local IP changed	Restrict inbound RDP to your current public IP and verify instance state/status checks. Do not open RDP globally.
+Unexpected AWS charges	Running compute, EBS, public IPv4, transfer or other services	Review Cost Explorer/Billing and the current pricing calculator; stop or terminate resources you no longer need, after securing data and positions.
+
+
+22. AWS cost and shutdown notes
+Before launching, use https://calculator.aws/ and select the Mumbai (ap-south-1) region, Windows EC2, the exact instance type, expected hours per month and EBS volume. Include any public IPv4 and data-transfer costs shown by AWS and check the estimate again before changing instance sizes.
+- Running: EC2 compute charges accrue while the instance is running.
+- Stopped: compute billing generally stops, but EBS volumes and certain allocated network resources can continue to incur charges.
+- Terminated: the instance is deleted; any EBS volumes configured to persist may continue to incur charges. Back up needed data first.
+- Bot consequence: a stopped or terminated instance cannot run MT5 or the Python bot.
+A 24/7 bot deployment means the Windows instance, terminal and bot process must remain operational. AWS uptime does not guarantee the broker terminal, broker connection, market data feed or trading logic will remain healthy.
+23. Project-specific limitations found in the supplied ZIP
+These are important installation and execution notes based on the actual uploaded archive:
+1. Primary runner: use main.py for the supplied four-pipeline setup.
+2. Missing module in alternate runners: fxjers_main.py and news_main.py import ml_engine.MLEngine, but ml_engine.py is absent from the ZIP. Those alternate entry points are incomplete as supplied.
+3. Current main mode: main.py states Pure Strategy Mode and says the ML gate was removed. ai_learning.py contains historical-performance filters/analysis, but this archive does not include a trained ML model implementation used by the primary runner.
+4. No dependency lock file: the archive does not include requirements.txt or pinned dependency versions. The install commands above install the required external imports, but package versions are not locked.
+5. No test suite/backtest evidence in the archive: installation and import checks do not verify trading logic, profitability, broker compatibility or live order behaviour.
+6. Generated caches: the archive contains __pycache__ files from CPython 3.10. These should not be relied upon; remove/exclude them and let the active Python interpreter compile the source files.
+7. Secret cleanup: the email-report module's hard-coded credential-like fallback must be removed before a public GitHub push or deployment.
+24. Official downloads and references
+- Python 3.14.10 x64 Windows installer: https://www.python.org/downloads/release/python-31410/
+- Python support lifecycle: https://devguide.python.org/versions/
+- MetaTrader 5 Desktop: https://www.metatrader5.com/en/download
+- MetaTrader5 Python package: https://pypi.org/project/MetaTrader5/
+- MetaTrader5 Python integration reference: https://www.mql5.com/en/docs/python_metatrader5
+- MetaTrader5 initialize() reference: https://www.mql5.com/en/docs/python_metatrader5/mt5initialize_py
+- MetaTrader 5 platform settings: https://www.metatrader5.com/en/terminal/help/startworking/settings
+- Git for Windows: https://git-scm.com/download/win
+- AWS EC2 Windows instances: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-windows-instances.html
+- AWS Windows RDP connection: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/connect-rdp.html
+- EC2 instance availability by region: https://docs.aws.amazon.com/ec2/latest/instancetypes/ec2-instance-regions.html
+- AWS T3 instance specifications: https://aws.amazon.com/ec2/instance-types/t3/
+- AWS Pricing Calculator: https://calculator.aws/
+25. Installation completion checklist
+Installation is complete only when all applicable checks below pass:
+- [ ] Windows x86-64 is installed and updated.
+- [ ] Python 3.14.x x64 is installed and confirmed with py -3.14 --version.
+- [ ] Git is installed if using GitHub clone/pull.
+- [ ] MetaTrader 5 Desktop is installed on the same machine as Python.
+- [ ] The broker DEMO account connects successfully in MT5.
+- [ ] Project files are in the correct project root.
+- [ ] .venv is created and activated.
+- [ ] MetaTrader5, pandas, numpy, requests imports succeed.
+- [ ] The email hard-coded credential is removed and any exposed credential is revoked.
+- [ ] No secret/private runtime files are committed to GitHub.
+- [ ] mt5_connection_test.py reports a successful terminal and account connection.
+- [ ] Broker-specific symbols and execution constraints have been reviewed.
+- [ ] The bot has been started only on a DEMO account for initial testing.
+- [ ] AWS RDP is restricted to the operator's IP.
+- [ ] AWS budget/alerts are configured and the monthly estimate is understood.
+- [ ] VPS restart, MT5 reconnection and single-instance behaviour have been tested before unattended operation.
+Final reminder: Getting main.py to start is only an installation milestone. It is not a backtest, proof of correctness, proof of profitability or permission to switch to a live trading account.
