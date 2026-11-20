@@ -26,9 +26,9 @@ import analytics as A
 import charts    as C
 
 # ---- CONFIG — fill these in ----
-SENDER_EMAIL   = os.getenv("BOT_EMAIL",    "elitebotreports@gmail.com")
-APP_PASSWORD   = os.getenv("BOT_PASS",     "sbgefukuubewscqo")
-RECEIVER_EMAIL = os.getenv("BOT_RECV",     "kameshwaranfx@gmail.com")
+SENDER_EMAIL   = os.getenv("BOT_EMAIL")
+APP_PASSWORD   = os.getenv("BOT_PASS")
+RECEIVER_EMAIL = os.getenv("BOT_RECV")
 
 _PLACEHOLDERS = {"your_email@gmail.com", "your_app_password"}
 
