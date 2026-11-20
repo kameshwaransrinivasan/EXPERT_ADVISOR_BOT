@@ -190,5 +190,3 @@ These files may contain private trading/account activity. Keep them local and ex
 3. The main runner prints that it is operating in “Pure Strategy Mode”. `ai_learning.py` contains historical win-rate/performance calculations and filters; this archive does not contain a trained ML model implementation. Do not describe the current primary runner as a trained machine-learning bot.
 4. The archive includes `__pycache__` compiled files. They are generated artifacts and should be removed from the Git repository; Python will recreate them when needed.
 5. No automated test suite, pinned dependency file or verified backtest results were found in the archive. Source syntax was checked, but a successful live MetaTrader 5 runtime, order execution, broker compatibility and strategy performance have not been verified by that syntax check.
-
-## Recommended `.gitignore`
